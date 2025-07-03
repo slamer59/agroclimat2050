@@ -202,20 +202,31 @@ class MapVisualizer:
     """Visualisateur de cartes pour les indicateurs"""
     
     def __init__(self):
+        # Couleurs selon l'image de légende
         self.stress_colors = {
-            0: '#00ff00',  # Vert - Aucun stress
-            1: '#ffff00',  # Jaune - Faible
-            2: '#ffa500',  # Orange - Modéré
-            3: '#ff4500',  # Rouge orangé - Fort
-            4: '#8b0000'   # Rouge foncé - Très sévère
+            0: '#00ff00',  # Vert - Aucun stress (0.0-68.0)
+            1: '#ffff00',  # Jaune - Faible (68.0-72.0)
+            2: '#ffa500',  # Orange - Modéré (72.0-80.0)
+            3: '#ff4500',  # Rouge orangé - Fort (80.0-90.0)
+            4: '#8b0000'   # Rouge foncé - Très sévère (90.0-99.0)
         }
         
+        # Labels avec valeurs selon l'image
         self.stress_labels = {
-            0: 'Aucun stress',
-            1: 'Faible',
-            2: 'Modéré', 
-            3: 'Fort',
-            4: 'Très sévère'
+            0: '0.0-68.0 : Aucun stress',
+            1: '68.0-72.0 : Faible',
+            2: '72.0-80.0 : Modéré', 
+            3: '80.0-90.0 : Fort',
+            4: '90.0-99.0 : Très sévère'
+        }
+        
+        # Valeurs numériques pour le hover
+        self.stress_ranges = {
+            0: (0.0, 68.0),
+            1: (68.0, 72.0),
+            2: (72.0, 80.0),
+            3: (80.0, 90.0),
+            4: (90.0, 99.0)
         }
     
     def create_base_map(self):
@@ -230,7 +241,7 @@ class MapVisualizer:
         return lons, lats, france_bounds
     
     def create_indicator_map(self, indicator_data, title, lons, lats):
-        """Crée une carte d'indicateur"""
+        """Crée une carte d'indicateur avec hover values"""
         # Création d'un dataset xarray
         lon_grid, lat_grid = np.meshgrid(lons, lats)
         
@@ -238,15 +249,16 @@ class MapVisualizer:
         if indicator_data.shape != lon_grid.shape:
             indicator_data = np.resize(indicator_data, lon_grid.shape)
         
-        # Créer le dataset
-        ds = xr.Dataset({
-            'indicator': (['lat', 'lon'], indicator_data),
-            'lon': (['lat', 'lon'], lon_grid),
-            'lat': (['lat', 'lon'], lat_grid)
-        })
+        # Générer des valeurs réelles pour le hover basées sur les classes
+        real_values = np.zeros_like(indicator_data, dtype=float)
+        for i in range(5):
+            mask = indicator_data == i
+            min_val, max_val = self.stress_ranges[i]
+            # Générer des valeurs aléatoires dans la plage appropriée
+            real_values[mask] = np.random.uniform(min_val, max_val, np.sum(mask))
         
-        # Créer la visualisation avec geoviews
-        map_data = gv.QuadMesh((ds.lon, ds.lat, ds.indicator), 
+        # Créer la visualisation avec geoviews - format simplifié
+        map_data = gv.QuadMesh((lons, lats, indicator_data), 
                               crs=ccrs.PlateCarree())
         
         # Configuration des couleurs discrètes
@@ -600,4 +612,4 @@ class AgroclimaticApp(param.Parameterized):
 
 app = AgroclimaticApp()
 # Alternative : servir directement le layout
-pn.serve(app.layout, port=5007, show=True, autoreload=True)
+pn.serve(app.layout)
