@@ -465,10 +465,13 @@ class AgroclimaticApp(param.Parameterized):
         
         # Étape 3: Paramètres (initialement masqué)
         step3_title = pn.pane.Markdown("## 3 - Paramètres", margin=(10, 5))
+        self.animal_params_pane = pn.Param(
+            self.param.animal_params, show_name=False, width=300
+        )
         
         # Conteneurs conditionnels pour les étapes
         self.step2_container = pn.Column(step2_title, step2_widget, visible=False)
-        self.step3_container = pn.Column(step3_title, self.param.animal_params, visible=False)
+        self.step3_container = pn.Column(step3_title, self.animal_params_pane, visible=False)
         self.step4_container = pn.Column(pn.pane.Markdown("## 4 - Modèle météorologique"), self.param.weather_model, visible=False)
         
         # Zone d'information
@@ -553,25 +556,31 @@ class AgroclimaticApp(param.Parameterized):
     @param.depends('animal_params.animal_type', watch=True)
     def _update_animal_type(self):
         """Met à jour les paramètres spécifiques à l'animal"""
-        if self.animal_params.animal_type == "VACHE LAITIÈRE":
-            self.animal_params = DairyCowParams(
-                animal_type=self.animal_params.animal_type,
-                simulation_mode=self.animal_params.simulation_mode,
-                temperature_offset=self.animal_params.temperature_offset
-            )
-        elif self.animal_params.animal_type in ["Poule de chair", "Poule pondeuse"]:
-            self.animal_params = PoultryParams(
-                animal_type=self.animal_params.animal_type,
-                simulation_mode=self.animal_params.simulation_mode,
-                temperature_offset=self.animal_params.temperature_offset
-            )
+        current_params = self.animal_params
+        if current_params.animal_type == "VACHE LAITIÈRE":
+            if not isinstance(current_params, DairyCowParams):
+                self.animal_params = DairyCowParams(
+                    animal_type=current_params.animal_type,
+                    simulation_mode=current_params.simulation_mode,
+                    temperature_offset=current_params.temperature_offset
+                )
+        elif current_params.animal_type in ["Poule de chair", "Poule pondeuse"]:
+            if not isinstance(current_params, PoultryParams):
+                self.animal_params = PoultryParams(
+                    animal_type=current_params.animal_type,
+                    simulation_mode=current_params.simulation_mode,
+                    temperature_offset=current_params.temperature_offset
+                )
         else:
-            self.animal_params = AnimalParams(
-                animal_type=self.animal_params.animal_type,
-                simulation_mode=self.animal_params.simulation_mode,
-                temperature_offset=self.animal_params.temperature_offset
-            )
-        self.step3_container.objects = [self.param.animal_params]
+            if not type(current_params) is AnimalParams:
+                self.animal_params = AnimalParams(
+                    animal_type=current_params.animal_type,
+                    simulation_mode=current_params.simulation_mode,
+                    temperature_offset=current_params.temperature_offset
+                )
+        
+        if self.animal_params is not current_params:
+            self.animal_params_pane.object = self.animal_params
     
     def _create_map(self):
         """Crée la carte selon l'indicateur sélectionné"""
