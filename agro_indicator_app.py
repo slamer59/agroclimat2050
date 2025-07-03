@@ -275,25 +275,81 @@ class MapVisualizer:
 class AgroclimaticApp(param.Parameterized):
     """Application principale des indicateurs agroclimatiques"""
     
-    # Paramètres de l'interface
-    selected_indicator = param.Selector(
-        default="Stress thermique maximal",
+    # Étape 1: Sélection de catégorie
+    selected_category = param.Selector(
+        default="ANIMAUX",
         objects=[
-            "Stress thermique maximal",
-            "Stress thermique moyen", 
-            "Perte de ponte (%)",
-            "Perte de production de lait (%)",
-            "Perte de GMQ - Gain en masse quotidien (%)"
+            "ANIMAUX",
+            "FEUX DE FORÊT", 
+            "MALADIES",
+            "PRATIQUES AGRICOLES",
+            "RAVAGEURS",
+            "POLLENS",
+            "VÉGÉTAUX"
+        ],
+        doc="Catégorie d'activité agricole"
+    )
+    
+    # Étape 2: Sélection d'indicateur (KPI) - dépend de la catégorie
+    selected_indicator = param.Selector(
+        default="STRESS THERMIQUE MAXIMAL",
+        objects=[
+            "STRESS THERMIQUE MAXIMAL",
+            "PERTE DE PONTE (%)",
+            "PERTE DE PRODUCTION DE LAIT (%)",
+            "PERTE DE GMQ - GAIN EN MASSE QUOTIDIEN (%)"
         ],
         doc="Indicateur à afficher"
     )
     
+    # Étape 3: Paramètres - Type d'animal
+    animal_type = param.Selector(
+        default="VACHE LAITIÈRE",
+        objects=[
+            "VACHE LAITIÈRE",
+            "VACHE ALLAITANTE",
+            "POULES PONDEUSES",
+            "BOVINS À L'ENGRAISSEMENT"
+        ],
+        doc="Type d'animal"
+    )
+    
+    # Race d'animal
+    animal_breed = param.Selector(
+        default="PRIM'HOLSTEIN",
+        objects=[
+            "PRIM'HOLSTEIN",
+            "MONTBÉLIARDE",
+            "NORMANDE",
+            "CHAROLAISE"
+        ],
+        doc="Race de l'animal"
+    )
+    
+    # Étape 4: Modèle météorologique
+    weather_model = param.Selector(
+        default="AROME",
+        objects=[
+            "AROME",
+            "ARPEGE",
+            "GFS"
+        ],
+        doc="Modèle météorologique"
+    )
+    
+    # Paramètres techniques
     temperature_threshold = param.Number(
         default=30.0,
         bounds=(15.0, 40.0),
         step=0.5,
         doc="Seuil de température (°C)"
     )
+    
+    # État de l'interface - pour contrôler les étapes
+    current_step = param.Integer(default=1, bounds=(1, 5))
+    show_step_2 = param.Boolean(default=False)
+    show_step_3 = param.Boolean(default=False)
+    show_step_4 = param.Boolean(default=False)
     
     def __init__(self, **params):
         super().__init__(**params)
@@ -302,6 +358,41 @@ class AgroclimaticApp(param.Parameterized):
         self.data_manager = DataManager()
         self.calculator = IndicatorCalculator(self.data_manager)
         self.visualizer = MapVisualizer()
+        
+        # Définition des indicateurs par catégorie
+        self.indicators_by_category = {
+            "ANIMAUX": [
+                "STRESS THERMIQUE MAXIMAL",
+                "PERTE DE PONTE (%)",
+                "PERTE DE PRODUCTION DE LAIT (%)",
+                "PERTE DE GMQ - GAIN EN MASSE QUOTIDIEN (%)"
+            ],
+            "FEUX DE FORÊT": [
+                "RISQUE D'INCENDIE",
+                "INDICE MÉTÉOROLOGIQUE"
+            ],
+            "MALADIES": [
+                "PROPAGATION PATHOGÈNES",
+                "CONDITIONS FAVORABLES"
+            ],
+            "PRATIQUES AGRICOLES": [
+                "FENÊTRE DE TIR",
+                "CONDITIONS DE TRAVAIL"
+            ],
+            "RAVAGEURS": [
+                "DÉVELOPPEMENT INSECTES",
+                "CYCLES BIOLOGIQUES"
+            ],
+            "POLLENS": [
+                "CONCENTRATION POLLENS",
+                "ALLERGÈNES"
+            ],
+            "VÉGÉTAUX": [
+                "STRESS HYDRIQUE",
+                "ÉCHAUDAGE",
+                "GEL"
+            ]
+        }
         
         # Génération des données de base
         self._generate_sample_data()
@@ -333,38 +424,81 @@ class AgroclimaticApp(param.Parameterized):
         self.data_manager.save_to_parquet(humidity_df, "humidity_data")
     
     def _create_ui(self):
-        """Crée l'interface utilisateur"""
-        # Panneau de contrôle
-        controls = pn.Param(
+        """Crée l'interface utilisateur step-by-step"""
+        
+        # Étape 1: Choisir une catégorie
+        step1_title = pn.pane.Markdown("## 1 - Choisir une catégorie", margin=(10, 5))
+        step1_widget = pn.Param(
             self,
-            parameters=['selected_indicator', 'temperature_threshold'],
-            widgets={
-                'selected_indicator': pn.widgets.Select,
-                'temperature_threshold': pn.widgets.FloatSlider
-            },
+            parameters=['selected_category'],
+            widgets={'selected_category': pn.widgets.RadioButtonGroup},
             width=300,
-            sizing_mode='fixed'
+            show_name=False
         )
+        
+        # Étape 2: Choisir un indicateur (initialement masqué)
+        step2_title = pn.pane.Markdown("## 2 - Choisir un indicateur", margin=(10, 5))
+        step2_widget = pn.Param(
+            self,
+            parameters=['selected_indicator'],
+            widgets={'selected_indicator': pn.widgets.RadioButtonGroup},
+            width=300,
+            show_name=False
+        )
+        
+        # Étape 3: Paramètres (initialement masqué)
+        step3_title = pn.pane.Markdown("## 3 - Paramètres", margin=(10, 5))
+        step3_animal_type = pn.Param(
+            self,
+            parameters=['animal_type'],
+            widgets={'animal_type': pn.widgets.Select},
+            width=300,
+            show_name=False
+        )
+        step3_animal_breed = pn.Param(
+            self,
+            parameters=['animal_breed'],
+            widgets={'animal_breed': pn.widgets.Select},
+            width=300,
+            show_name=False
+        )
+        
+        # Étape 4: Modèle météorologique (initialement masqué)
+        step4_title = pn.pane.Markdown("## 4 - Modèle météorologique", margin=(10, 5))
+        step4_widget = pn.Param(
+            self,
+            parameters=['weather_model'],
+            widgets={'weather_model': pn.widgets.RadioButtonGroup},
+            width=300,
+            show_name=False
+        )
+        
+        # Conteneurs conditionnels pour les étapes
+        self.step2_container = pn.Column(step2_title, step2_widget, visible=False)
+        self.step3_container = pn.Column(step3_title, step3_animal_type, step3_animal_breed, visible=False)
+        self.step4_container = pn.Column(step4_title, step4_widget, visible=False)
         
         # Zone d'information
         info_pane = pn.pane.Markdown("""
-        ## Indicateurs Agroclimatiques
+        ## AGRO CLIMAT
         
-        Cette application permet de visualiser différents indicateurs de stress 
-        climatique pour l'élevage:
+        Suivez les étapes pour configurer votre analyse:
         
-        - **Stress thermique**: Impact de la température sur les animaux
-        - **Perte de ponte**: Réduction de la production d'œufs
-        - **Perte de production laitière**: Impact sur les bovins laitiers
-        - **Perte de GMQ**: Impact sur la croissance des bovins
+        1. **Catégorie**: Choisissez le domaine d'activité
+        2. **Indicateur**: Sélectionnez l'indicateur à analyser  
+        3. **Paramètres**: Configurez les paramètres spécifiques
+        4. **Modèle**: Choisissez le modèle météorologique
         
-        Survolez un point pour avoir plus d'informations.
+        La carte se mettra à jour automatiquement.
         """, width=300)
         
-        # Panneau latéral
+        # Panneau latéral avec les étapes
         sidebar = pn.Column(
-            "## Paramètres",
-            controls,
+            step1_title,
+            step1_widget,
+            self.step2_container,
+            self.step3_container, 
+            self.step4_container,
             info_pane,
             width=320,
             sizing_mode='fixed'
@@ -379,39 +513,77 @@ class AgroclimaticApp(param.Parameterized):
         
         # Layout principal
         self.layout = pn.template.MaterialTemplate(
-            title="Indicateurs Agroclimatiques - France",
+            title="AGRO CLIMAT - Indicateurs Agroclimatiques",
             sidebar=[sidebar],
             main=[self.map_pane],
             header_background='#2596be',
         )
     
-    @param.depends('selected_indicator', 'temperature_threshold', watch=True)
-    def _update_map(self):
-        """Met à jour la carte quand les paramètres changent"""
+    @param.depends('selected_category', watch=True)
+    def _update_category(self):
+        """Met à jour les indicateurs disponibles selon la catégorie sélectionnée"""
+        # Mettre à jour les indicateurs disponibles
+        available_indicators = self.indicators_by_category.get(self.selected_category, [])
+        self.param.selected_indicator.objects = available_indicators
+        if available_indicators:
+            self.selected_indicator = available_indicators[0]
+        
+        # Afficher l'étape 2
+        self.step2_container.visible = True
+        
+    @param.depends('selected_indicator', watch=True)
+    def _update_indicator(self):
+        """Met à jour l'interface selon l'indicateur sélectionné"""
+        if self.selected_indicator:
+            # Afficher l'étape 3 si on est dans la catégorie ANIMAUX
+            if self.selected_category == "ANIMAUX":
+                self.step3_container.visible = True
+            else:
+                self.step3_container.visible = False
+                # Afficher directement l'étape 4 pour les autres catégories
+                self.step4_container.visible = True
+        
+        # Mettre à jour la carte
+        self.map_pane.object = self._create_map()
+    
+    @param.depends('animal_type', 'animal_breed', watch=True)
+    def _update_parameters(self):
+        """Met à jour l'interface selon les paramètres sélectionnés"""
+        if self.animal_type and self.animal_breed:
+            # Afficher l'étape 4
+            self.step4_container.visible = True
+        
+        # Mettre à jour la carte
+        self.map_pane.object = self._create_map()
+    
+    @param.depends('weather_model', watch=True)
+    def _update_weather_model(self):
+        """Met à jour la carte selon le modèle météorologique"""
         self.map_pane.object = self._create_map()
     
     def _create_map(self):
         """Crée la carte selon l'indicateur sélectionné"""
         # Calculer l'indicateur selon la sélection
-        if self.selected_indicator == "Stress thermique maximal":
+        if self.selected_indicator == "STRESS THERMIQUE MAXIMAL":
             indicator_data = self.calculator.calculate_heat_stress_max(
                 self.temp_data, self.temperature_threshold
             )
-        elif self.selected_indicator == "Stress thermique moyen":
-            indicator_data = self.calculator.calculate_heat_stress_avg(
-                self.temp_data, self.temperature_threshold
-            )
-        elif self.selected_indicator == "Perte de ponte (%)":
+        elif self.selected_indicator == "PERTE DE PONTE (%)":
             indicator_data = self.calculator.calculate_laying_loss(
                 self.temp_data, self.humidity_data
             )
-        elif self.selected_indicator == "Perte de production de lait (%)":
+        elif self.selected_indicator == "PERTE DE PRODUCTION DE LAIT (%)":
             indicator_data = self.calculator.calculate_milk_production_loss(
                 self.temp_data
             )
-        else:  # Perte de GMQ
+        elif self.selected_indicator == "PERTE DE GMQ - GAIN EN MASSE QUOTIDIEN (%)":
             indicator_data = self.calculator.calculate_daily_weight_gain_loss(
                 self.temp_data, self.humidity_data
+            )
+        else:
+            # Pour les autres indicateurs, utiliser des données simulées
+            indicator_data = self.calculator.calculate_heat_stress_max(
+                self.temp_data, self.temperature_threshold
             )
         
         # Créer la carte
@@ -426,8 +598,6 @@ class AgroclimaticApp(param.Parameterized):
         """Lance l'application"""
         return pn.serve(self.layout, port=port, show=show, autoreload=True)
 
-# Point d'entrée principal
-if __name__ == "__main__":
-    app = AgroclimaticApp()
-    # Alternative : servir directement le layout
-    pn.serve(app.layout, port=5007, show=True, autoreload=True)
+app = AgroclimaticApp()
+# Alternative : servir directement le layout
+pn.serve(app.layout, port=5007, show=True, autoreload=True)
