@@ -1,3 +1,4 @@
 cache/*
 **/*.pyc
 data/*.parquet
+**/*.egg-info

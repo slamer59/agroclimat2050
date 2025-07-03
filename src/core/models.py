@@ -1,218 +1,67 @@
-"""
-Modèles de données pour l'application agroclimatique
-Utilise Pydantic pour la validation et sérialisation
-"""
-
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
 
 
 class AnimalCategory(Enum):
-    """Catégories d'animaux"""
-    BOVINS = "bovins"
-    VOLAILLES = "volailles"
-    PORCINS = "porcins"
-    OVINS = "ovins"
+    BOVINS = "BOVINS"
+    VOLAILLES = "VOLAILLES"
 
-
-class WeatherModel(Enum):
-    """Modèles météorologiques disponibles"""
-    AROME = "arome"
-    ARPEGE = "arpege" 
-    GFS = "gfs"
-
-
-class AnimalType(BaseModel):
-    """Type d'animal avec ses caractéristiques"""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    
+@dataclass
+class AnimalType:
     id: str
     name: str
     category: AnimalCategory
-    optimal_temp: float
-    optimal_humidity: float
-    temp_tolerance: float
-    humidity_tolerance: float
-    races: List[str] = Field(default_factory=list)
+    races: List[str]
 
+ANIMAL_TYPES = {
+    "VACHE_LAITIERE": AnimalType(id="VACHE_LAITIERE", name="Vache laitière", category=AnimalCategory.BOVINS, races=["PRIM'HOLSTEIN", "MONTBÉLIARDE", "NORMANDE"]),
+    "VACHE_ALLAITANTE": AnimalType(id="VACHE_ALLAITANTE", name="Vache allaitante", category=AnimalCategory.BOVINS, races=["CHAROLAISE", "LIMOUSINE", "HEREFORD"]),
+    "POULES_PONDEUSES": AnimalType(id="POULES_PONDEUSES", name="Poules pondeuses", category=AnimalCategory.VOLAILLES, races=["ISA BROWN", "HY-LINE BROWN", "Lohmann Brown"]),
+    "BOVINS_A_L_ENGRAISSEMENT": AnimalType(id="BOVINS_A_L_ENGRAISSEMENT", name="Bovins à l'engraissement", category=AnimalCategory.BOVINS, races=["CHAROLAISE", "LIMOUSINE", "HEREFORD"]),
+}
 
-class IndicatorDefinition(BaseModel):
-    """Définition d'un indicateur agroclimatique"""
+@dataclass
+class Indicator:
     id: str
     name: str
-    description: str
-    unit: str
     category: AnimalCategory
-    animal_types: List[str]
     calculation_function: str
-    parameters: Dict[str, Any] = Field(default_factory=dict)
 
+INDICATORS = {
+    "STRESS_THERMIQUE_MAXIMAL": Indicator(id="STRESS_THERMIQUE_MAXIMAL", name="Stress thermique maximal", category=AnimalCategory.BOVINS, calculation_function="calculate_heat_stress_max"),
+    "PERTE_DE_PONTE": Indicator(id="PERTE_DE_PONTE", name="Perte de ponte (%)", category=AnimalCategory.VOLAILLES, calculation_function="calculate_laying_loss"),
+    "PERTE_DE_PRODUCTION_DE_LAIT": Indicator(id="PERTE_DE_PRODUCTION_DE_LAIT", name="Perte de production de lait (%)", category=AnimalCategory.BOVINS, calculation_function="calculate_milk_production_loss"),
+    "PERTE_DE_GMQ": Indicator(id="PERTE_DE_GMQ", name="Perte de GMQ - Gain en masse quotidien (%)", category=AnimalCategory.BOVINS, calculation_function="calculate_daily_weight_gain_loss"),
+}
 
-class WeatherModelInfo(BaseModel):
-    """Informations sur un modèle météorologique"""
+@dataclass
+class WeatherModel:
     id: str
     name: str
     description: str
     resolution: str
-    forecast_days: int
-    update_frequency: str
 
-
-class FilterState(BaseModel):
-    """État actuel des filtres sélectionnés"""
-    category: Optional[AnimalCategory] = None
-    indicator_id: Optional[str] = None
-    animal_type_id: Optional[str] = None
-    race: Optional[str] = None
-    weather_model: Optional[WeatherModel] = None
-    temperature_threshold: float = 30.0
-    humidity_threshold: float = 60.0
-    forecast_date: Optional[str] = None
-
-
-class MapData(BaseModel):
-    """Données pour l'affichage de la carte"""
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-    
-    lons: np.ndarray
-    lats: np.ndarray
-    values: np.ndarray
-    title: str
-    unit: str
-    colormap: Dict[int, str]
-    labels: Dict[int, str]
-
-
-# Configuration des types d'animaux
-ANIMAL_TYPES = {
-    "vache_laitiere": AnimalType(
-        id="vache_laitiere",
-        name="Vache laitière",
-        category=AnimalCategory.BOVINS,
-        optimal_temp=18.0,
-        optimal_humidity=65.0,
-        temp_tolerance=5.0,
-        humidity_tolerance=15.0,
-        races=["Prim'Holstein", "Montbéliarde", "Normande", "Simmental"]
-    ),
-    "vache_allaitante": AnimalType(
-        id="vache_allaitante", 
-        name="Vache allaitante",
-        category=AnimalCategory.BOVINS,
-        optimal_temp=20.0,
-        optimal_humidity=60.0,
-        temp_tolerance=8.0,
-        humidity_tolerance=20.0,
-        races=["Charolaise", "Limousine", "Salers", "Aubrac"]
-    ),
-    "bovin_engraissement": AnimalType(
-        id="bovin_engraissement",
-        name="Bovin à l'engraissement", 
-        category=AnimalCategory.BOVINS,
-        optimal_temp=16.0,
-        optimal_humidity=65.0,
-        temp_tolerance=6.0,
-        humidity_tolerance=15.0,
-        races=["Charolais", "Limousin", "Blonde d'Aquitaine"]
-    ),
-    "poule_pondeuse": AnimalType(
-        id="poule_pondeuse",
-        name="Poule pondeuse",
-        category=AnimalCategory.VOLAILLES,
-        optimal_temp=20.0,
-        optimal_humidity=60.0,
-        temp_tolerance=5.0,
-        humidity_tolerance=10.0,
-        races=["ISA Brown", "Lohmann Brown", "Hy-Line"]
-    ),
-    "poulet_chair": AnimalType(
-        id="poulet_chair",
-        name="Poulet de chair",
-        category=AnimalCategory.VOLAILLES,
-        optimal_temp=22.0,
-        optimal_humidity=65.0,
-        temp_tolerance=4.0,
-        humidity_tolerance=10.0,
-        races=["Ross 308", "Cobb 500", "Hubbard"]
-    )
-}
-
-# Configuration des indicateurs
-INDICATORS = {
-    "stress_thermique_max": IndicatorDefinition(
-        id="stress_thermique_max",
-        name="Stress thermique maximal",
-        description="Niveau de stress basé sur la température maximale",
-        unit="Niveau (0-4)",
-        category=AnimalCategory.BOVINS,
-        animal_types=["vache_laitiere", "vache_allaitante", "bovin_engraissement"],
-        calculation_function="calculate_heat_stress_max"
-    ),
-    "stress_thermique_moyen": IndicatorDefinition(
-        id="stress_thermique_moyen", 
-        name="Stress thermique moyen",
-        description="Niveau de stress basé sur la température moyenne",
-        unit="Niveau (0-4)",
-        category=AnimalCategory.BOVINS,
-        animal_types=["vache_laitiere", "vache_allaitante", "bovin_engraissement"],
-        calculation_function="calculate_heat_stress_avg"
-    ),
-    "perte_ponte": IndicatorDefinition(
-        id="perte_ponte",
-        name="Perte de ponte",
-        description="Réduction de la production d'œufs due au stress climatique",
-        unit="Pourcentage (%)",
-        category=AnimalCategory.VOLAILLES,
-        animal_types=["poule_pondeuse"],
-        calculation_function="calculate_laying_loss"
-    ),
-    "perte_lait": IndicatorDefinition(
-        id="perte_lait",
-        name="Perte de production laitière",
-        description="Réduction de la production de lait due au stress thermique",
-        unit="Pourcentage (%)",
-        category=AnimalCategory.BOVINS,
-        animal_types=["vache_laitiere"],
-        calculation_function="calculate_milk_production_loss"
-    ),
-    "perte_gmq": IndicatorDefinition(
-        id="perte_gmq",
-        name="Perte de GMQ",
-        description="Réduction du gain de masse quotidien",
-        unit="Pourcentage (%)",
-        category=AnimalCategory.BOVINS,
-        animal_types=["bovin_engraissement"],
-        calculation_function="calculate_daily_weight_gain_loss"
-    )
-}
-
-# Configuration des modèles météorologiques
 WEATHER_MODELS = {
-    WeatherModel.AROME: WeatherModelInfo(
-        id="arome",
-        name="AROME",
-        description="Haute résolution",
-        resolution="2 jours",
-        forecast_days=2,
-        update_frequency="4 fois/jour"
-    ),
-    WeatherModel.ARPEGE: WeatherModelInfo(
-        id="arpege", 
-        name="ARPEGE",
-        description="Moyen terme",
-        resolution="4 jours",
-        forecast_days=4,
-        update_frequency="2 fois/jour"
-    ),
-    WeatherModel.GFS: WeatherModelInfo(
-        id="gfs",
-        name="GFS", 
-        description="Global",
-        resolution="10 jours",
-        forecast_days=10,
-        update_frequency="4 fois/jour"
-    )
+    "AROME": WeatherModel(id="AROME", name="AROME", description="Modèle de prévision numérique à haute résolution", resolution="1 km"),
+    "ARPEGE": WeatherModel(id="ARPEGE", name="ARPEGE", description="Modèle de prévision numérique à moyenne résolution", resolution="10 km"),
+    "GFS": WeatherModel(id="GFS", name="GFS", description="Modèle de prévision numérique global", resolution="25 km"),
 }
+
+@dataclass
+class FilterState:
+    category: AnimalCategory = AnimalCategory.BOVINS
+    indicator_id: str = ""
+    animal_type_id: str = ""
+    race: str = ""
+    weather_model: str = "AROME"
+    temperature_threshold: float = 30.0
+
+@dataclass
+class MapData:
+    lons: list
+    lats: list
+    temp_data: np.ndarray
+    humidity_data: np.ndarray
