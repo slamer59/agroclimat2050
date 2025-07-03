@@ -1,0 +1,3 @@
+"""
+Module core contenant la logique métier
+"""
