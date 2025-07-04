@@ -19,8 +19,201 @@ import xyzservices.providers as xyz
 warnings.filterwarnings('ignore')
 pn.extension()
 
-# --- Fonctions de calcul des indicateurs ---
+# --- Arbre de Décision ---
+DECISION_TREE = {
+    "ANIMAUX": {
+        "STRESS THERMIQUE MAXIMAL": {
+            "variable_name": "stress_thermique_max",
+            "type": {
+                "VACHE LAITIÈRE": {
+                    "race": ["PRIM'HOLSTEIN", "HOLSTEIN", "NORMANDE"],
+                    "weather_models": {
+                        "AROME": {"label": "🔍 AROME — HD court terme (2 jours)", "max_days": 2},
+                        "ARPEGE": {"label": "🌐 ARPEGE — moyen terme (4 jours)", "max_days": 4}
+                    }
+                },
+                "PORC": {
+                    "race": ["PIÉTRAIN", "LARGE WHITE"],
+                    "weather_models": {
+                        "ARPEGE": {"label": "🌐 ARPEGE (4 jours)", "max_days": 4},
+                        "GFS": {"label": "🌍 GFS — global (10 jours)", "max_days": 10}
+                    }
+                }
+            }
+        },
+        "PERTE DE PONTE (%)": {
+            "variable_name": "perte_ponte",
+            "type": {
+                "POULE PONDEUSE": {
+                    "race": ["COB", "LEGHORN"],
+                    "weather_models": {
+                        "ARPEGE": {"label": "🌐 ARPEGE (4 jours)", "max_days": 4},
+                        "GFS": {"label": "🌍 GFS — global (10 jours)", "max_days": 10}
+                    }
+                }
+            }
+        },
+        "PERTE DE PRODUCTION DE LAIT (%)": {
+            "variable_name": "perte_lait",
+            "type": {
+                "VACHE LAITIÈRE": {
+                    "race": ["PRIM'HOLSTEIN", "HOLSTEIN", "NORMANDE"],
+                    "weather_models": {
+                        "ARPEGE": {"label": "🌐 ARPEGE (4 jours)", "max_days": 4},
+                    }
+                }
+            }
+        },
+        "PERTE DE GMQ - GAIN EN MASSE QUOTIDIEN (%)": {
+            "variable_name": "perte_gmq",
+            "type": {
+                "POULE DE CHAIR": {
+                    "race": ["COB", "LEGHORN"],
+                    "weather_models": {
+                        "ARPEGE": {"label": "🌐 ARPEGE (4 jours)", "max_days": 4}
+                    }
+                }
+            }
+        }
+    },
+    "MALADIE": {
+        "CROISSANCE": {
+            "variable_name": "maladie_croissance",
+            "type": {
+                "BLE": {
+                    "type_maladie": ["OIDIUM", "ROUGE"],
+                    "weather_models": {
+                        "AROME": {"label": "🔍 AROME (2 jours)", "max_days": 2},
+                        "ARPEGE": {"label": "🌐 ARPEGE (4 jours)", "max_days": 4}
+                    }
+                },
+                "VIGNE": {
+                    "type_maladie": ["MILDIOU"],
+                    "weather_models": {
+                        "AROME": {"label": "🔍 AROME (2 jours)", "max_days": 2},
+                        "ARPEGE": {"label": "🌐 ARPEGE (4 jours)", "max_days": 4}
+                    }
+                }
+            }
+        }
+    },
+    "RAVAGEUR": {
+        "CROISSANCE": {
+            "variable_name": "ravageur_croissance",
+            "type": {
+                "BLE": {
+                    "type_ravageur": ["Puceron sur épis"],
+                    "weather_models": {
+                        "AROME": {"label": "🔍 AROME (2 jours)", "max_days": 2},
+                        "ARPEGE": {"label": "🌐 ARPEGE (4 jours)", "max_days": 4}
+                    }
+                },
+                "POMME DE TERRE": {
+                    "type_ravageur": ["Charançon des pommes de terre"],
+                    "weather_models": {
+                        "AROME": {"label": "🔍 AROME (2 jours)", "max_days": 2},
+                    }
+                }
+            }
+        }
+    },
+    "VÉGÉTAUX": {
+        "POTENTIEL DE PERTES PAR GEL (%)": {
+            "variable_name": "pertes_gel",
+            "parameters": {
+                "Espèce": ["ABRICOTIER"],
+                "Stade de développement": ["REPOS HIVERNAL"],
+                "weather_models": {
+                    "AROME": {"label": "🔍 AROME — HD court terme (2 jours)", "max_days": 2},
+                    "ARPEGE": {"label": "🌐 ARPEGE — moyen terme (4 jours)", "max_days": 4},
+                    "GFS": {"label": "🌡️ GFS — Global (10 jours)", "max_days": 10},
+                    "DMI": {"label": "🌎 DMI — Nordique (2 jours)", "max_days": 2},
+                    "ICON_monde": {"label": "🌎 ICON — Monde (7 jours)", "max_days": 7},
+                    "ICON_europe": {"label": "🌎 ICON — Europe (5 jours)", "max_days": 5}
+                }
+            }
+        },
+        "VITESSE DE CROISSANCE": {
+            "variable_name": "vitesse_croissance",
+            "type": {
+                "BLE": {
+                    "weather_models": {
+                        "AROME": {"label": "🔍 AROME — HD court terme (2 jours)", "max_days": 2},
+                        "ARPEGE": {"label": "🌐 ARPEGE — moyen terme (4 jours)", "max_days": 4}
+                    }
+                }
+            }
+        },
+        "STRESS THERMIQUE": {
+            "variable_name": "stress_thermique_vegetaux",
+            "type": {
+                "BLE": {
+                    "weather_models": {
+                        "AROME": {"label": "🔍 AROME — HD court terme (2 jours)", "max_days": 2},
+                        "ARPEGE": {"label": "🌐 ARPEGE — moyen terme (4 jours)", "max_days": 4}
+                    }
+                }
+            }
+        }
+    }
+}
 
+# --- Modèle de Données ---
+class AgroModel(param.Parameterized):
+    category = param.ObjectSelector(default="ANIMAUX", objects=list(DECISION_TREE.keys()))
+    indicator = param.ObjectSelector(objects=[], allow_None=True)
+    type = param.ObjectSelector(objects=[], allow_None=True)
+    parameters = param.ObjectSelector(objects=[], allow_None=True)
+    race = param.ObjectSelector(objects=[], allow_None=True)
+    weather_model = param.ObjectSelector(objects=[], allow_None=True)
+
+    def __init__(self, **params):
+        super().__init__(**params)
+        self._update_indicator()
+
+    @param.depends('category', watch=True)
+    def _update_indicator(self):
+        indicators = list(DECISION_TREE.get(self.category, {}).keys())
+        self.param.indicator.objects = indicators
+        self.indicator = indicators[0] if indicators else None
+
+    @param.depends('indicator', watch=True)
+    def _update_type(self):
+        data = DECISION_TREE.get(self.category, {}).get(self.indicator, {})
+        types = list(data.get('type', {}).keys())
+        self.param.type.objects = types
+        self.type = types[0] if types else None
+
+    @param.depends('type', watch=True)
+    def _update_parameters(self):
+        data = DECISION_TREE.get(self.category, {}).get(self.indicator, {})
+        if 'parameters' in data:
+            params = list(data.get('parameters', {}).keys())
+            self.param.parameters.objects = params
+            self.parameters = params[0] if params else None
+        else:
+            self.param.parameters.objects = []
+            self.parameters = None
+
+    @param.depends('parameters', 'type', watch=True)
+    def _update_race_and_weather(self):
+        data = DECISION_TREE.get(self.category, {}).get(self.indicator, {})
+        if self.type and 'type' in data:
+            sub_data = data['type'].get(self.type, {})
+        elif self.parameters and 'parameters' in data:
+            sub_data = data['parameters']
+        else:
+            sub_data = {}
+
+        races = sub_data.get('race', [])
+        self.param.race.objects = races
+        self.race = races[0] if races else None
+
+        weather_models = list(sub_data.get('weather_models', {}).keys())
+        self.param.weather_model.objects = weather_models
+        self.weather_model = weather_models[0] if weather_models else None
+
+# --- Fonctions de calcul des indicateurs ---
 class IndicatorCalculator:
     """
     Calcule les indicateurs agroclimatiques à partir de données xarray.
@@ -70,25 +263,13 @@ class IndicatorCalculator:
         return stress_classes
 
 # --- Application Principale ---
-
 class AgroclimaticApp(param.Parameterized):
-    """Application principale avec UI multi-étapes et backend xarray."""
+    """Application principale avec UI dynamique et backend xarray."""
 
-    # --- Étape 1: Sélection de catégorie ---
-    selected_category = param.Selector(
-        default="ANIMAUX",
-        objects=["ANIMAUX", "FEUX DE FORÊT", "MALADIES", "PRATIQUES AGRICOLES", "RAVAGEURS", "POLLENS", "VÉGÉTAUX"],
-        doc="Catégorie d'activité agricole"
-    )
+    # --- Modèle de données et UI ---
+    agro_model = param.ClassSelector(AgroModel, default=AgroModel())
 
-    # --- Étape 2: Sélection d'indicateur (KPI) ---
-    selected_indicator = param.Selector(
-        default="STRESS THERMIQUE MAXIMAL",
-        objects=[], # Sera peuplé dynamiquement
-        doc="Indicateur à afficher"
-    )
-
-    # --- Étape 3: Paramètres ---
+    # --- Paramètres spécifiques à l'indicateur ---
     temperature_threshold = param.Number(
         default=30.0, bounds=(15.0, 40.0), step=0.5,
         doc="Seuil de température (°C) pour le stress thermique"
@@ -100,34 +281,16 @@ class AgroclimaticApp(param.Parameterized):
     map_pane = param.Parameter(doc="Le conteneur stable pour la carte afin d'éviter le flash.")
     DATA_FILE = "agro_data.nc"
 
-    # --- Dictionnaires de mapping ---
-    INDICATORS_BY_CATEGORY = {
-        "ANIMAUX": [
-            "STRESS THERMIQUE MAXIMAL",
-            "PERTE DE PONTE (%)",
-            "PERTE DE PRODUCTION DE LAIT (%)",
-            "PERTE DE GMQ - GAIN EN MASSE QUOTIDIEN (%)"
-        ],
-        "FEUX DE FORÊT": ["RISQUE D'INCENDIE"],
-        "MALADIES": ["PROPAGATION PATHOGÈNES"],
-    }
-
-    KPI_VAR_MAP = {
-        "STRESS THERMIQUE MAXIMAL": "stress_thermique_max",
-        "PERTE DE PONTE (%)": "perte_ponte",
-        "PERTE DE PRODUCTION DE LAIT (%)": "perte_lait",
-        "PERTE DE GMQ - GAIN EN MASSE QUOTIDIEN (%)": "perte_gmq",
-        "RISQUE D'INCENDIE": "risque_incendie",
-        "PROPAGATION PATHOGÈNES": "propagation_pathogenes"
-    }
-
     def __init__(self, **params):
         super().__init__(**params)
         self.ds = self._load_or_create_dataset()
         self.map_pane = pn.pane.HoloViews(None, width=800, height=600)
-        self._update_indicator_options()
-        self.param.watch(self._update_map_view, ['selected_indicator', 'temperature_threshold'])
-        self._update_map_view() # Appel initial pour afficher la première carte
+        
+        # Watchers for dynamic updates
+        self.agro_model.param.watch(self._update_map_view, 'indicator')
+        self.param.watch(self._update_map_view, 'temperature_threshold')
+        
+        self._update_map_view() # Initial call to display the map
 
     def _load_or_create_dataset(self):
         if os.path.exists(self.DATA_FILE):
@@ -147,13 +310,6 @@ class AgroclimaticApp(param.Parameterized):
         
         ds.to_netcdf(self.DATA_FILE)
         return ds
-
-    @param.depends('selected_category', watch=True)
-    def _update_indicator_options(self):
-        indicators = self.INDICATORS_BY_CATEGORY.get(self.selected_category, [])
-        self.param.selected_indicator.objects = indicators
-        if indicators:
-            self.selected_indicator = indicators[0]
 
     def _ensure_kpi_is_calculated(self, kpi_name, kpi_var):
         if kpi_var and (kpi_var in self.ds and kpi_name != "STRESS THERMIQUE MAXIMAL"):
@@ -185,8 +341,18 @@ class AgroclimaticApp(param.Parameterized):
             print("✅ Cache mis à jour.")
 
     def _get_map_object(self):
-        kpi_name = self.selected_indicator
-        kpi_var = self.KPI_VAR_MAP.get(kpi_name, 'Tair')
+        kpi_name = self.agro_model.indicator
+        if not kpi_name:
+            return pn.pane.Markdown("### Veuillez sélectionner un indicateur.")
+
+        # Retrieve kpi_var directly from DECISION_TREE
+        category_data = DECISION_TREE.get(self.agro_model.category, {})
+        indicator_data = category_data.get(kpi_name, {})
+        kpi_var = indicator_data.get("variable_name")
+
+        if not kpi_var:
+             return pn.pane.Markdown(f"### L'indicateur '{kpi_name}' n'est pas encore implémenté ou n'a pas de variable associée.")
+
         self._ensure_kpi_is_calculated(kpi_name, kpi_var)
         
         title = f"{kpi_name}"
@@ -207,12 +373,21 @@ class AgroclimaticApp(param.Parameterized):
         self.map_pane.object = self._get_map_object()
 
     def get_panel(self):
-        step1_card = pn.Card(self.param.selected_category, title="1 - Choisir une catégorie", width=320)
-        step2_card = pn.Card(self.param.selected_indicator, title="2 - Choisir un indicateur", width=320)
-        params_view = pn.panel(self.param.temperature_threshold, visible=pn.bind(lambda ind: ind == "STRESS THERMIQUE MAXIMAL", self.param.selected_indicator))
-        step3_card = pn.Card(params_view, title="3 - Paramètres", width=320)
+        # --- Panneau de contrôle dynamique ---
+        selection_panel = pn.Card(
+            pn.Param(self.agro_model.param, parameters=['category', 'indicator', 'type', 'parameters', 'race', 'weather_model']),
+            title="1 - Sélection de l'indicateur",
+            width=320
+        )
 
-        sidebar = pn.Column(step1_card, step2_card, step3_card)
+        # --- Panneau de paramètres contextuels ---
+        params_view = pn.panel(
+            self.param.temperature_threshold, 
+            visible=pn.bind(lambda ind: ind == "STRESS THERMIQUE MAXIMAL", self.agro_model.param.indicator)
+        )
+        params_card = pn.Card(params_view, title="2 - Paramètres de l'indicateur", width=320)
+
+        sidebar = pn.Column(selection_panel, params_card)
         
         layout = pn.template.MaterialTemplate(
             title="AGRO CLIMAT - Indicateurs (Version Complète)",
@@ -222,10 +397,9 @@ class AgroclimaticApp(param.Parameterized):
         )
         return layout
 
-
 if os.path.exists(AgroclimaticApp.DATA_FILE):
     print("🗑️ Suppression de l'ancien fichier de cache pour assurer la compatibilité.")
     os.remove(AgroclimaticApp.DATA_FILE)
-    
+
 app = AgroclimaticApp()
 app.get_panel().servable()
