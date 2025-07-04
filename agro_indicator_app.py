@@ -6,6 +6,8 @@ Architecture modulaire avec séparation UI/calculs et cache efficace
 import datetime
 import pickle
 import warnings
+import threading
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -77,7 +79,7 @@ class DataManager:
             return pd.read_parquet(filepath)
         return None
     
-    @lru_cache(maxsize=32)
+    @lru_cache(maxsize=256)
     def get_cached_data(self, cache_key):
         """Récupère des données du cache"""
         cache_file = self.cache_dir / f"{cache_key}.pkl"
@@ -100,111 +102,113 @@ class IndicatorCalculator:
         
     def calculate_heat_stress_max(self, temp_data, threshold=30):
         """Calcule le stress thermique maximal"""
-        cache_key = f"heat_stress_max_{threshold}"
+        # Enhanced cache key with data shape and threshold
+        data_hash = hash(temp_data.tobytes()) if hasattr(temp_data, 'tobytes') else hash(str(temp_data))
+        cache_key = f"heat_stress_max_{threshold}_{data_hash}_{temp_data.shape}"
         cached = self.data_manager.get_cached_data(cache_key)
         if cached is not None:
             return cached
             
-        # Simulation de calcul de stress thermique
+        # Vectorized stress calculation
         stress_values = np.where(temp_data > threshold, 
                                (temp_data - threshold) / threshold * 100, 0)
         
-        # Classification du stress
-        stress_classes = np.select([
-            stress_values <= 0,
-            (stress_values > 0) & (stress_values <= 10),
-            (stress_values > 10) & (stress_values <= 25),
-            (stress_values > 25) & (stress_values <= 50),
-            stress_values > 50
-        ], [0, 1, 2, 3, 4], default=0)
+        # Optimized vectorized classification
+        stress_classes = np.zeros_like(stress_values, dtype=np.int8)
+        stress_classes[stress_values > 0] = 1
+        stress_classes[stress_values > 10] = 2
+        stress_classes[stress_values > 25] = 3
+        stress_classes[stress_values > 50] = 4
         
-        result = stress_classes
-        self.data_manager.set_cache(cache_key, result)
-        return result
+        self.data_manager.set_cache(cache_key, stress_classes)
+        return stress_classes
     
     def calculate_heat_stress_avg(self, temp_data, threshold=25):
         """Calcule le stress thermique moyen"""
-        cache_key = f"heat_stress_avg_{threshold}"
+        # Enhanced cache key
+        data_hash = hash(temp_data.tobytes()) if hasattr(temp_data, 'tobytes') else hash(str(temp_data))
+        cache_key = f"heat_stress_avg_{threshold}_{data_hash}_{temp_data.shape}"
         cached = self.data_manager.get_cached_data(cache_key)
         if cached is not None:
             return cached
             
-        # Simulation de calcul de stress thermique moyen
+        # Vectorized stress calculation
         stress_values = np.where(temp_data > threshold, 
                                (temp_data - threshold) / threshold * 50, 0)
         
-        stress_classes = np.select([
-            stress_values <= 0,
-            (stress_values > 0) & (stress_values <= 5),
-            (stress_values > 5) & (stress_values <= 15),
-            (stress_values > 15) & (stress_values <= 30),
-            stress_values > 30
-        ], [0, 1, 2, 3, 4], default=0)
+        # Optimized vectorized classification
+        stress_classes = np.zeros_like(stress_values, dtype=np.int8)
+        stress_classes[stress_values > 0] = 1
+        stress_classes[stress_values > 5] = 2
+        stress_classes[stress_values > 15] = 3
+        stress_classes[stress_values > 30] = 4
         
-        result = stress_classes
-        self.data_manager.set_cache(cache_key, result)
-        return result
+        self.data_manager.set_cache(cache_key, stress_classes)
+        return stress_classes
     
     def calculate_laying_loss(self, temp_data, humidity_data):
         """Calcule la perte de ponte"""
-        cache_key = "laying_loss"
+        # Enhanced cache key with both datasets
+        temp_hash = hash(temp_data.tobytes()) if hasattr(temp_data, 'tobytes') else hash(str(temp_data))
+        humid_hash = hash(humidity_data.tobytes()) if hasattr(humidity_data, 'tobytes') else hash(str(humidity_data))
+        cache_key = f"laying_loss_{temp_hash}_{humid_hash}_{temp_data.shape}"
         cached = self.data_manager.get_cached_data(cache_key)
         if cached is not None:
             return cached
             
-        # Simulation basée sur température et humidité
+        # Vectorized calculation
         comfort_temp = 20
         comfort_humidity = 60
         
         temp_stress = np.abs(temp_data - comfort_temp) / comfort_temp
         humidity_stress = np.abs(humidity_data - comfort_humidity) / comfort_humidity
-        
         total_stress = (temp_stress + humidity_stress) * 50
         
-        stress_classes = np.select([
-            total_stress <= 5,
-            (total_stress > 5) & (total_stress <= 15),
-            (total_stress > 15) & (total_stress <= 30),
-            (total_stress > 30) & (total_stress <= 50),
-            total_stress > 50
-        ], [0, 1, 2, 3, 4], default=0)
+        # Optimized vectorized classification
+        stress_classes = np.zeros_like(total_stress, dtype=np.int8)
+        stress_classes[total_stress > 5] = 1
+        stress_classes[total_stress > 15] = 2
+        stress_classes[total_stress > 30] = 3
+        stress_classes[total_stress > 50] = 4
         
-        result = stress_classes
-        self.data_manager.set_cache(cache_key, result)
-        return result
+        self.data_manager.set_cache(cache_key, stress_classes)
+        return stress_classes
     
     def calculate_milk_production_loss(self, temp_data):
         """Calcule la perte de production de lait"""
-        cache_key = "milk_production_loss"
+        # Enhanced cache key
+        data_hash = hash(temp_data.tobytes()) if hasattr(temp_data, 'tobytes') else hash(str(temp_data))
+        cache_key = f"milk_production_loss_{data_hash}_{temp_data.shape}"
         cached = self.data_manager.get_cached_data(cache_key)
         if cached is not None:
             return cached
             
-        # Simulation pour bovins laitiers
+        # Vectorized calculation
         optimal_temp = 18
         stress_values = np.where(temp_data > optimal_temp,
                                (temp_data - optimal_temp) / optimal_temp * 60, 0)
         
-        stress_classes = np.select([
-            stress_values <= 0,
-            (stress_values > 0) & (stress_values <= 10),
-            (stress_values > 10) & (stress_values <= 25),
-            (stress_values > 25) & (stress_values <= 40),
-            stress_values > 40
-        ], [0, 1, 2, 3, 4], default=0)
+        # Optimized vectorized classification
+        stress_classes = np.zeros_like(stress_values, dtype=np.int8)
+        stress_classes[stress_values > 0] = 1
+        stress_classes[stress_values > 10] = 2
+        stress_classes[stress_values > 25] = 3
+        stress_classes[stress_values > 40] = 4
         
-        result = stress_classes
-        self.data_manager.set_cache(cache_key, result)
-        return result
+        self.data_manager.set_cache(cache_key, stress_classes)
+        return stress_classes
     
     def calculate_daily_weight_gain_loss(self, temp_data, humidity_data):
         """Calcule la perte de GMQ (Gain de Masse Quotidien)"""
-        cache_key = "daily_weight_gain_loss"
+        # Enhanced cache key
+        temp_hash = hash(temp_data.tobytes()) if hasattr(temp_data, 'tobytes') else hash(str(temp_data))
+        humid_hash = hash(humidity_data.tobytes()) if hasattr(humidity_data, 'tobytes') else hash(str(humidity_data))
+        cache_key = f"daily_weight_gain_loss_{temp_hash}_{humid_hash}_{temp_data.shape}"
         cached = self.data_manager.get_cached_data(cache_key)
         if cached is not None:
             return cached
             
-        # Simulation pour bovins à l'engraissement
+        # Vectorized calculation
         optimal_temp = 16
         optimal_humidity = 65
         
@@ -215,17 +219,15 @@ class IndicatorCalculator:
         
         combined_stress = (temp_factor + humidity_factor) * 40
         
-        stress_classes = np.select([
-            combined_stress <= 0,
-            (combined_stress > 0) & (combined_stress <= 8),
-            (combined_stress > 8) & (combined_stress <= 20),
-            (combined_stress > 20) & (combined_stress <= 35),
-            combined_stress > 35
-        ], [0, 1, 2, 3, 4], default=0)
+        # Optimized vectorized classification
+        stress_classes = np.zeros_like(combined_stress, dtype=np.int8)
+        stress_classes[combined_stress > 0] = 1
+        stress_classes[combined_stress > 8] = 2
+        stress_classes[combined_stress > 20] = 3
+        stress_classes[combined_stress > 35] = 4
         
-        result = stress_classes
-        self.data_manager.set_cache(cache_key, result)
-        return result
+        self.data_manager.set_cache(cache_key, stress_classes)
+        return stress_classes
 
 class MapVisualizer:
     """Visualisateur de cartes pour les indicateurs"""
@@ -367,6 +369,10 @@ class AgroclimaticApp(param.Parameterized):
     show_step_2 = param.Boolean(default=False)
     show_step_3 = param.Boolean(default=False)
     show_step_4 = param.Boolean(default=False)
+    
+    # Debouncing for parameter updates
+    _update_timer = param.Parameter(default=None)
+    _pending_update = param.Boolean(default=False)
     
     # Attributes
     data_manager = param.ClassSelector(DataManager)
@@ -578,6 +584,21 @@ class AgroclimaticApp(param.Parameterized):
         # Afficher l'étape 2
         self.step2_container.visible = True
         
+    def _debounced_update_map(self):
+        """Met à jour la carte après un délai (debouncing)"""
+        if self._update_timer is not None:
+            self._update_timer.cancel()
+        
+        def delayed_update():
+            time.sleep(0.3)  # 300ms delay
+            if self._pending_update:
+                self.map_pane.object = self._create_map()
+                self._pending_update = False
+        
+        self._pending_update = True
+        self._update_timer = threading.Timer(0.3, delayed_update)
+        self._update_timer.start()
+    
     @param.depends('selected_indicator', watch=True)
     def _update_indicator(self):
         """Met à jour l'interface selon l'indicateur sélectionné"""
@@ -590,8 +611,8 @@ class AgroclimaticApp(param.Parameterized):
                 # Afficher directement l'étape 4 pour les autres catégories
                 self.step4_container.visible = True
         
-        # Mettre à jour la carte
-        self.map_pane.object = self._create_map()
+        # Mettre à jour la carte avec debouncing
+        self._debounced_update_map()
     
     def _create_animal_params_panel(self):
         """Crée le panneau de paramètres animaux selon le design"""
@@ -647,7 +668,12 @@ class AgroclimaticApp(param.Parameterized):
     @param.depends('weather_model', watch=True)
     def _update_weather_model(self):
         """Met à jour la carte selon le modèle météorologique"""
-        self.map_pane.object = self._create_map()
+        self._debounced_update_map()
+    
+    @param.depends('temperature_threshold', watch=True)
+    def _update_temperature_threshold(self):
+        """Met à jour la carte selon le seuil de température"""
+        self._debounced_update_map()
     
     @param.depends('animal_params.animal_type', watch=True)
     def _update_animal_type(self):
