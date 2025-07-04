@@ -23,6 +23,9 @@ import xarray as xr
 from holoviews import opts
 from panel.io.profile import profile
 
+# Debug mode flag - Set to False for production
+DEBUG_PROFILING = True  # Change to False to disable profiling
+
 warnings.filterwarnings('ignore')
 
 # Configuration Panel
@@ -100,6 +103,7 @@ class IndicatorCalculator:
     def __init__(self, data_manager):
         self.data_manager = data_manager
         
+    @profile('heat_stress_max_calculation', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def calculate_heat_stress_max(self, temp_data, threshold=30):
         """Calcule le stress thermique maximal"""
         # Enhanced cache key with data shape and threshold
@@ -123,6 +127,7 @@ class IndicatorCalculator:
         self.data_manager.set_cache(cache_key, stress_classes)
         return stress_classes
     
+    @profile('heat_stress_avg_calculation', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def calculate_heat_stress_avg(self, temp_data, threshold=25):
         """Calcule le stress thermique moyen"""
         # Enhanced cache key
@@ -146,6 +151,7 @@ class IndicatorCalculator:
         self.data_manager.set_cache(cache_key, stress_classes)
         return stress_classes
     
+    @profile('laying_loss_calculation', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def calculate_laying_loss(self, temp_data, humidity_data):
         """Calcule la perte de ponte"""
         # Enhanced cache key with both datasets
@@ -174,6 +180,7 @@ class IndicatorCalculator:
         self.data_manager.set_cache(cache_key, stress_classes)
         return stress_classes
     
+    @profile('milk_production_loss_calculation', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def calculate_milk_production_loss(self, temp_data):
         """Calcule la perte de production de lait"""
         # Enhanced cache key
@@ -198,6 +205,7 @@ class IndicatorCalculator:
         self.data_manager.set_cache(cache_key, stress_classes)
         return stress_classes
     
+    @profile('daily_weight_gain_loss_calculation', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def calculate_daily_weight_gain_loss(self, temp_data, humidity_data):
         """Calcule la perte de GMQ (Gain de Masse Quotidien)"""
         # Enhanced cache key
@@ -271,6 +279,7 @@ class MapVisualizer:
         
         return lons, lats, france_bounds
     
+    @profile('indicator_map_creation', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def create_indicator_map(self, indicator_data, title, lons, lats):
         """Crée une carte d'indicateur avec hover values"""
         # Création d'un dataset xarray
@@ -567,6 +576,7 @@ class AgroclimaticApp(param.Parameterized):
         )
     
     @param.depends('selected_category', watch=True)
+    @profile('indicator_update', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def _update_indicators(self):
         """Met à jour les indicateurs disponibles selon la catégorie sélectionnée"""
         if self.selected_category == "ANIMAUX":
@@ -584,6 +594,7 @@ class AgroclimaticApp(param.Parameterized):
         # Afficher l'étape 2
         self.step2_container.visible = True
         
+    @profile('debounced_map_update', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def _debounced_update_map(self):
         """Met à jour la carte après un délai (debouncing)"""
         if self._update_timer is not None:
@@ -704,6 +715,7 @@ class AgroclimaticApp(param.Parameterized):
         if self.animal_params is not current_params:
             self.animal_params_pane.object = self.animal_params
     
+    @profile('map_creation', engine='pyinstrument') if DEBUG_PROFILING else lambda f: f
     def _create_map(self):
         """Crée la carte selon l'indicateur sélectionné"""
         # Calculer l'indicateur selon la sélection
@@ -738,4 +750,43 @@ class AgroclimaticApp(param.Parameterized):
         )
     
 app = AgroclimaticApp()
+
+# Debug profiling utilities
+if DEBUG_PROFILING:
+    def get_performance_report():
+        """Get performance profiling report for all tracked functions"""
+        profiles = [
+            'heat_stress_max_calculation',
+            'heat_stress_avg_calculation', 
+            'laying_loss_calculation',
+            'milk_production_loss_calculation',
+            'daily_weight_gain_loss_calculation',
+            'map_creation',
+            'debounced_map_update',
+            'indicator_update',
+            'indicator_map_creation'
+        ]
+        
+        print("=== PERFORMANCE PROFILING REPORT ===")
+        for profile_name in profiles:
+            try:
+                result = pn.state.get_profile(profile_name)
+                if result:
+                    print(f"\n{profile_name.upper()}:")
+                    print(f"  Calls: {len(result) if hasattr(result, '__len__') else 'N/A'}")
+                else:
+                    print(f"\n{profile_name.upper()}: No data yet")
+            except Exception as e:
+                print(f"\n{profile_name.upper()}: Error - {e}")
+        print("=" * 40)
+    
+    # Make profiling function available globally
+    app.get_performance_report = get_performance_report
+    
+    print("🔍 DEBUG PROFILING ENABLED")
+    print("Access performance data with:")
+    print("  - Individual: pn.state.get_profile('heat_stress_max_calculation')")
+    print("  - All reports: app.get_performance_report()")
+    print("  - Admin panel: /admin (when running panel serve)")
+
 app.layout.servable()
