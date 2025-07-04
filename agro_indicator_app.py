@@ -595,15 +595,6 @@ class AgroclimaticApp(param.Parameterized):
     
     def _create_animal_params_panel(self):
         """Crée le panneau de paramètres animaux selon le design"""
-        # Animal params text input matching the design
-        animal_params_input = pn.widgets.TextInput(
-            name="Animal params",
-            value="<AnimalParams AnimalParams00335>",
-            width=280,
-            margin=(5, 5),
-            styles={'background': '#ffffff', 'border': '1px solid #dee2e6'}
-        )
-        
         # Animal type dropdown with styling
         animal_type_select = pn.widgets.Select(
             name="Animal type",
@@ -645,7 +636,6 @@ class AgroclimaticApp(param.Parameterized):
         self.temp_offset_slider = temp_offset_slider
         
         return pn.Column(
-            animal_params_input,
             animal_type_select,
             simulation_checkbox,
             temp_offset_slider,
