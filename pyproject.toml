@@ -22,3 +22,8 @@ dependencies = [
 members = [
     "batch8_mednum",
 ]
+
+[dependency-groups]
+dev = [
+    "snakeviz>=2.2.2",
+]

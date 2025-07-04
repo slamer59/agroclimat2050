@@ -19,6 +19,7 @@ import panel as pn
 import param
 import xarray as xr
 from holoviews import opts
+from panel.io.profile import profile
 
 warnings.filterwarnings('ignore')
 
@@ -367,6 +368,21 @@ class AgroclimaticApp(param.Parameterized):
     show_step_3 = param.Boolean(default=False)
     show_step_4 = param.Boolean(default=False)
     
+    # Attributes
+    data_manager = param.ClassSelector(DataManager)
+    calculator = param.ClassSelector(IndicatorCalculator)
+    visualizer = param.ClassSelector(MapVisualizer)
+    animal_params_pane = param.Parameter()
+    step2_container = param.Parameter()
+    step3_container = param.Parameter()
+    step4_container = param.Parameter()
+    map_pane = param.Parameter()
+    layout = param.Parameter()
+    temp_data = param.Parameter()
+    humidity_data = param.Parameter()
+    lons = param.Parameter()
+    lats = param.Parameter()
+
     def __init__(self, **params):
         super().__init__(**params)
         
@@ -444,35 +460,64 @@ class AgroclimaticApp(param.Parameterized):
         """Crée l'interface utilisateur step-by-step"""
         
         # Étape 1: Choisir une catégorie
-        step1_title = pn.pane.Markdown("## 1 - Choisir une catégorie", margin=(10, 5))
         step1_widget = pn.Param(
             self,
             parameters=['selected_category'],
             widgets={'selected_category': pn.widgets.RadioButtonGroup},
-            width=300,
-            show_name=False
+            show_name=False,
+            width=280,
+            margin=(5, 5)
+        )
+        
+        step1_card = pn.Card(
+            step1_widget,
+            title="1 - Choisir une catégorie",
+            width=320,
+            margin=(5, 5),
+            styles={'background': '#f8f9fa'}
         )
         
         # Étape 2: Choisir un indicateur (initialement masqué)
-        step2_title = pn.pane.Markdown("## 2 - Choisir un indicateur", margin=(10, 5))
         step2_widget = pn.Param(
             self,
             parameters=['selected_indicator'],
             widgets={'selected_indicator': pn.widgets.RadioButtonGroup},
-            width=300,
-            show_name=False
+            show_name=False,
+            width=280,
+            margin=(5, 5)
+        )
+        
+        step2_card = pn.Card(
+            step2_widget,
+            title="2 - Choisir un indicateur",
+            width=320,
+            margin=(5, 5),
+            styles={'background': '#f8f9fa'}
         )
         
         # Étape 3: Paramètres (initialement masqué)
-        step3_title = pn.pane.Markdown("## 3 - Paramètres", margin=(10, 5))
-        self.animal_params_pane = pn.Param(
-            self.param.animal_params, show_name=False, width=300
+        self.animal_params_pane = self._create_animal_params_panel()
+        step3_card = pn.Card(
+            self.animal_params_pane,
+            title="3 - Paramètres",
+            width=320,
+            margin=(5, 5),
+            styles={'background': '#f8f9fa'}
         )
         
         # Conteneurs conditionnels pour les étapes
-        self.step2_container = pn.Column(step2_title, step2_widget, visible=False)
-        self.step3_container = pn.Column(step3_title, self.animal_params_pane, visible=False)
-        self.step4_container = pn.Column(pn.pane.Markdown("## 4 - Modèle météorologique"), self.param.weather_model, visible=False)
+        self.step2_container = pn.Column(step2_card, visible=False)
+        self.step3_container = pn.Column(step3_card, visible=False)
+        self.step4_container = pn.Column(
+            pn.Card(
+                pn.Param(self, parameters=['weather_model'], show_name=False, width=280),
+                title="4 - Modèle météorologique",
+                width=320,
+                margin=(5, 5),
+                styles={'background': '#f8f9fa'}
+            ), 
+            visible=False
+        )
         
         # Zone d'information
         info_pane = pn.pane.Markdown("""
@@ -490,13 +535,12 @@ class AgroclimaticApp(param.Parameterized):
         
         # Panneau latéral avec les étapes
         sidebar = pn.Column(
-            step1_title,
-            step1_widget,
+            step1_card,
             self.step2_container,
             self.step3_container, 
             self.step4_container,
             info_pane,
-            width=320,
+            width=340,
             sizing_mode='fixed'
         )
         
@@ -507,12 +551,13 @@ class AgroclimaticApp(param.Parameterized):
             height=700
         )
         
-        # Layout principal
+        # Layout principal avec style amélioré
         self.layout = pn.template.MaterialTemplate(
             title="AGRO CLIMAT - Indicateurs Agroclimatiques",
             sidebar=[sidebar],
             main=[self.map_pane],
             header_background='#2596be',
+            sidebar_width=340
         )
     
     @param.depends('selected_category', watch=True)
@@ -521,11 +566,11 @@ class AgroclimaticApp(param.Parameterized):
         if self.selected_category == "ANIMAUX":
             self.param.selected_indicator.objects = self.indicators_by_category.get(self.selected_category, [])
             if not self.selected_indicator or self.selected_indicator not in self.param.selected_indicator.objects:
-                self.selected_indicator = self.param.selected_indicator.objects[0]
+                self.selected_indicator = self.param.selected_indicator.objects[0] if self.param.selected_indicator.objects else None
         elif self.selected_category == "MALADIES":
             self.param.selected_indicator.objects = self.indicators_by_category.get(self.selected_category, [])
             if not self.selected_indicator or self.selected_indicator not in self.param.selected_indicator.objects:
-                self.selected_indicator = self.param.selected_indicator.objects[0]
+                self.selected_indicator = self.param.selected_indicator.objects[0] if self.param.selected_indicator.objects else None
         else:
             self.param.selected_indicator.objects = []
             self.selected_indicator = None
@@ -547,6 +592,67 @@ class AgroclimaticApp(param.Parameterized):
         
         # Mettre à jour la carte
         self.map_pane.object = self._create_map()
+    
+    def _create_animal_params_panel(self):
+        """Crée le panneau de paramètres animaux selon le design"""
+        # Animal params text input matching the design
+        animal_params_input = pn.widgets.TextInput(
+            name="Animal params",
+            value="<AnimalParams AnimalParams00335>",
+            width=280,
+            margin=(5, 5),
+            styles={'background': '#ffffff', 'border': '1px solid #dee2e6'}
+        )
+        
+        # Animal type dropdown with styling
+        animal_type_select = pn.widgets.Select(
+            name="Animal type",
+            value="VACHE LAITIÈRE",
+            options=[
+                "VACHE LAITIÈRE",
+                "Vache allaitante", 
+                "Poule de chair",
+                "Poule pondeuse"
+            ],
+            width=280,
+            margin=(5, 5),
+            styles={'background': '#ffffff'}
+        )
+        
+        # Simulation mode checkbox
+        simulation_checkbox = pn.widgets.Checkbox(
+            name="Simulation mode",
+            value=False,
+            margin=(5, 5),
+            styles={'color': '#495057'}
+        )
+        
+        # Temperature offset slider with blue styling
+        temp_offset_slider = pn.widgets.FloatSlider(
+            name="Temperature offset: 0",
+            start=-5,
+            end=5,
+            step=0.1,
+            value=0,
+            width=280,
+            margin=(5, 5),
+            styles={'color': '#007bff'}
+        )
+        
+        # Store references for updates
+        self.animal_type_select = animal_type_select
+        self.simulation_checkbox = simulation_checkbox
+        self.temp_offset_slider = temp_offset_slider
+        
+        return pn.Column(
+            animal_params_input,
+            animal_type_select,
+            simulation_checkbox,
+            temp_offset_slider,
+            width=300,
+            margin=(5, 5)
+        )
+    
     
     @param.depends('weather_model', watch=True)
     def _update_weather_model(self):
