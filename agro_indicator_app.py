@@ -97,6 +97,7 @@ class AgroclimaticApp(param.Parameterized):
     # --- État interne ---
     ds = param.Parameter(doc="Le dataset xarray contenant les données et les KPIs.")
     calculator = param.ClassSelector(IndicatorCalculator, default=IndicatorCalculator())
+    map_pane = param.Parameter(doc="Le conteneur stable pour la carte afin d'éviter le flash.")
     DATA_FILE = "agro_data.nc"
 
     # --- Dictionnaires de mapping ---
@@ -109,7 +110,6 @@ class AgroclimaticApp(param.Parameterized):
         ],
         "FEUX DE FORÊT": ["RISQUE D'INCENDIE"],
         "MALADIES": ["PROPAGATION PATHOGÈNES"],
-        # Ajouter d'autres KPIs ici
     }
 
     KPI_VAR_MAP = {
@@ -117,18 +117,19 @@ class AgroclimaticApp(param.Parameterized):
         "PERTE DE PONTE (%)": "perte_ponte",
         "PERTE DE PRODUCTION DE LAIT (%)": "perte_lait",
         "PERTE DE GMQ - GAIN EN MASSE QUOTIDIEN (%)": "perte_gmq",
-        "RISQUE D'INCENDIE": "risque_incendie", # Exemple
-        "PROPAGATION PATHOGÈNES": "propagation_pathogenes" # Exemple
+        "RISQUE D'INCENDIE": "risque_incendie",
+        "PROPAGATION PATHOGÈNES": "propagation_pathogenes"
     }
 
     def __init__(self, **params):
         super().__init__(**params)
         self.ds = self._load_or_create_dataset()
-        self._update_indicator_options() # Initial call
-        self.param.watch(self._update_stress_kpi, 'temperature_threshold')
+        self.map_pane = pn.pane.HoloViews(None, width=800, height=600)
+        self._update_indicator_options()
+        self.param.watch(self._update_map_view, ['selected_indicator', 'temperature_threshold'])
+        self._update_map_view() # Appel initial pour afficher la première carte
 
     def _load_or_create_dataset(self):
-        """Charge ou crée le dataset NetCDF."""
         if os.path.exists(self.DATA_FILE):
             return xr.open_dataset(self.DATA_FILE)
         
@@ -149,18 +150,13 @@ class AgroclimaticApp(param.Parameterized):
 
     @param.depends('selected_category', watch=True)
     def _update_indicator_options(self):
-        """Met à jour la liste des indicateurs en fonction de la catégorie."""
         indicators = self.INDICATORS_BY_CATEGORY.get(self.selected_category, [])
         self.param.selected_indicator.objects = indicators
         if indicators:
             self.selected_indicator = indicators[0]
 
-    def _ensure_kpi_is_calculated(self):
-        """Calcule et met en cache le KPI si nécessaire."""
-        kpi_name = self.selected_indicator
-        kpi_var = self.KPI_VAR_MAP.get(kpi_name)
-
-        if not kpi_var or (kpi_var in self.ds and kpi_name != "STRESS THERMIQUE MAXIMAL"):
+    def _ensure_kpi_is_calculated(self, kpi_name, kpi_var):
+        if kpi_var and (kpi_var in self.ds and kpi_name != "STRESS THERMIQUE MAXIMAL"):
             return
 
         needs_update = False
@@ -182,72 +178,51 @@ class AgroclimaticApp(param.Parameterized):
             kpi_data = self.calculator.calculate_daily_weight_gain_loss(self.ds['Tair'], self.ds['humidity'])
             self.ds[kpi_var] = kpi_data
             needs_update = True
-        # Ajouter d'autres calculs de KPI ici
         
         if needs_update:
             print(f"💾 Mise à jour du cache dans {self.DATA_FILE}...")
             self.ds.to_netcdf(self.DATA_FILE)
             print("✅ Cache mis à jour.")
 
-    def _update_stress_kpi(self, *events):
-        """Force le recalcul du stress thermique lorsque le seuil change."""
-        if self.selected_indicator == "STRESS THERMIQUE MAXIMAL":
-            self._ensure_kpi_is_calculated()
-            self.param.trigger('selected_indicator') # Force map update
-
-    @param.depends('selected_indicator', 'temperature_threshold')
-    def get_map_view(self):
-        """Génère la carte de l'indicateur sélectionné."""
-        self._ensure_kpi_is_calculated()
+    def _get_map_object(self):
+        kpi_name = self.selected_indicator
+        kpi_var = self.KPI_VAR_MAP.get(kpi_name, 'Tair')
+        self._ensure_kpi_is_calculated(kpi_name, kpi_var)
         
-        kpi_var = self.KPI_VAR_MAP.get(self.selected_indicator, 'Tair')
-        title = f"{self.selected_indicator}"
-        if self.selected_indicator == "STRESS THERMIQUE MAXIMAL":
+        title = f"{kpi_name}"
+        if kpi_name == "STRESS THERMIQUE MAXIMAL":
             title += f" (Seuil: {self.temperature_threshold}°C)"
 
-        print(f"🗺️  Affichage de la carte pour : {title}")
+        print(f"🗺️  Génération de la vue pour : {title}")
         
         return self.ds.hvplot.quadmesh(
             x='lon', y='lat', z=kpi_var,
             crs=ccrs.PlateCarree(), projection=ccrs.GOOGLE_MERCATOR,
             tiles=xyz.Esri.WorldImagery, project=True, rasterize=True,
-            cmap='viridis', width=800, height=600, title=title
-        )
+            cmap='viridis', title=title
+        ).opts(width=800, height=600)
+
+    def _update_map_view(self, *events):
+        """Met à jour l'objet dans le conteneur de carte."""
+        self.map_pane.object = self._get_map_object()
 
     def get_panel(self):
-        """Construit le layout final de l'application Panel."""
-        
-        step1_card = pn.Card(
-            self.param.selected_category,
-            title="1 - Choisir une catégorie", width=320
-        )
-        
-        step2_card = pn.Card(
-            self.param.selected_indicator,
-            title="2 - Choisir un indicateur", width=320
-        )
-
-        # Le slider de température n'est visible que pour le stress thermique
+        step1_card = pn.Card(self.param.selected_category, title="1 - Choisir une catégorie", width=320)
+        step2_card = pn.Card(self.param.selected_indicator, title="2 - Choisir un indicateur", width=320)
         params_view = pn.panel(self.param.temperature_threshold, visible=pn.bind(lambda ind: ind == "STRESS THERMIQUE MAXIMAL", self.param.selected_indicator))
-        
-        step3_card = pn.Card(
-            params_view,
-            title="3 - Paramètres", width=320
-        )
+        step3_card = pn.Card(params_view, title="3 - Paramètres", width=320)
 
         sidebar = pn.Column(step1_card, step2_card, step3_card)
         
         layout = pn.template.MaterialTemplate(
             title="AGRO CLIMAT - Indicateurs (Version Complète)",
             sidebar=[sidebar],
-            main=[self.get_map_view],
+            main=[self.map_pane],
             header_background='#2596be', sidebar_width=340
         )
         return layout
 
-# --- Point d'entrée ---
 
-# Supprimer l'ancien cache pour éviter les conflits
 if os.path.exists(AgroclimaticApp.DATA_FILE):
     print("🗑️ Suppression de l'ancien fichier de cache pour assurer la compatibilité.")
     os.remove(AgroclimaticApp.DATA_FILE)
