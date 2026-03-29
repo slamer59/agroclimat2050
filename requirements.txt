@@ -48,7 +48,7 @@ linkify-it-py==2.0.3
     # via panel
 markdown==3.8.2
     # via panel
-markdown-it-py==3.0.0
+markdown-it-py==4.0.0
     # via
     #   mdit-py-plugins
     #   panel
