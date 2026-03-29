@@ -13,7 +13,7 @@ cartopy==0.24.1
     # via
     #   agroclima2050 (pyproject.toml)
     #   geoviews
-certifi==2025.6.15
+certifi==2026.2.25
     # via
     #   pyogrio
     #   pyproj
