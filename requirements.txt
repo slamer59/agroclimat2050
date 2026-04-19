@@ -76,7 +76,7 @@ numpy==2.3.1
     #   pyogrio
     #   shapely
     #   xarray
-packaging==25.0
+packaging==26.1
     # via
     #   bokeh
     #   cartopy
