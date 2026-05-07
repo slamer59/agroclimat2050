@@ -13,7 +13,7 @@ cartopy==0.24.1
     # via
     #   agroclima2050 (pyproject.toml)
     #   geoviews
-certifi==2025.6.15
+certifi==2026.4.22
     # via
     #   pyogrio
     #   pyproj
@@ -48,7 +48,7 @@ linkify-it-py==2.0.3
     # via panel
 markdown==3.8.2
     # via panel
-markdown-it-py==3.0.0
+markdown-it-py==4.2.0
     # via
     #   mdit-py-plugins
     #   panel
@@ -60,7 +60,7 @@ mdit-py-plugins==0.4.2
     # via panel
 mdurl==0.1.2
     # via markdown-it-py
-narwhals==1.45.0
+narwhals==2.20.0
     # via bokeh
 numpy==2.3.1
     # via
@@ -76,7 +76,7 @@ numpy==2.3.1
     #   pyogrio
     #   shapely
     #   xarray
-packaging==25.0
+packaging==26.2
     # via
     #   bokeh
     #   cartopy
@@ -87,7 +87,7 @@ packaging==25.0
     #   panel
     #   pyogrio
     #   xarray
-pandas==2.3.0
+pandas==3.0.2
     # via
     #   agroclima2050 (pyproject.toml)
     #   bokeh
@@ -107,11 +107,11 @@ param==2.2.1
     #   holoviews
     #   panel
     #   pyviz-comms
-pillow==11.3.0
+pillow==12.2.0
     # via
     #   bokeh
     #   matplotlib
-pyarrow==20.0.0
+pyarrow==24.0.0
     # via agroclima2050 (pyproject.toml)
 pydantic==2.11.7
     # via agroclima2050 (pyproject.toml)
@@ -126,13 +126,13 @@ pyproj==3.7.1
     #   cartopy
     #   geopandas
     #   geoviews
-pyshp==2.3.1
+pyshp==3.0.3
     # via cartopy
 python-dateutil==2.9.0.post0
     # via
     #   matplotlib
     #   pandas
-pytz==2025.2
+pytz==2026.2
     # via pandas
 pyviz-comms==3.0.6
     # via
@@ -161,17 +161,17 @@ typing-extensions==4.14.1
     #   typing-inspection
 typing-inspection==0.4.1
     # via pydantic
-tzdata==2025.2
+tzdata==2026.2
     # via pandas
-uc-micro-py==1.0.3
+uc-micro-py==2.0.0
     # via linkify-it-py
 urllib3==2.5.0
     # via requests
 webencodings==0.5.1
     # via bleach
-xarray==2025.7.0
+xarray==2026.4.0
     # via agroclima2050 (pyproject.toml)
-xyzservices==2025.4.0
+xyzservices==2026.3.0
     # via
     #   bokeh
     #   geoviews
